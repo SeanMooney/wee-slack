@@ -420,6 +420,30 @@ class SlackConfigSectionWorkspace:
             )
         )
 
+        self.history_fetch_count = self._create_option(
+            "history_fetch_count",
+            "maximum number of root messages to fetch when loading a conversation or thread buffer",
+            50,
+            min_value=1,
+            max_value=1000,
+        )
+
+        self.threads_fetch_count = self._create_option(
+            "threads_fetch_count",
+            "maximum number of thread parents to fetch inline replies for when loading a conversation buffer; only used when display_thread_replies_in_channel is enabled",
+            10,
+            min_value=0,
+            max_value=1000,
+        )
+
+        self.thread_replies_fetch_count = self._create_option(
+            "thread_replies_fetch_count",
+            "maximum number of inline thread replies to fetch per thread when loading a conversation buffer; only used when display_thread_replies_in_channel is enabled",
+            10,
+            min_value=0,
+            max_value=1000,
+        )
+
         self.network_timeout = self._create_option(
             "network_timeout",
             "timeout (in seconds) for network requests",

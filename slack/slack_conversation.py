@@ -412,7 +412,7 @@ class SlackConversation(SlackMessageBuffer):
         return self._members
 
     async def fetch_replies(
-        self, thread_ts: SlackTs
+        self, thread_ts: SlackTs, limit: Optional[int] = None
     ) -> Tuple[SlackMessage, List[SlackMessage]]:
         parent_message = self.messages.get(thread_ts)
         if (
@@ -424,7 +424,9 @@ class SlackConversation(SlackMessageBuffer):
                 self.messages[ts] for ts in parent_message.replies_tss
             ]
 
-        replies_response = await self.api.fetch_conversations_replies(self, thread_ts)
+        replies_response = await self.api.fetch_conversations_replies(
+            self, thread_ts, limit=limit
+        )
         messages = [
             SlackMessage(self, message) for message in replies_response["messages"]
         ]
@@ -446,7 +448,7 @@ class SlackConversation(SlackMessageBuffer):
 
         self._messages = OrderedDict(sorted(self._messages.items()))
 
-        parent_message.reply_history_filled = True
+        parent_message.reply_history_filled = limit is None
         return parent_message, replies
 
     async def fetch_history(self, all_current_messages: bool):
@@ -501,6 +503,21 @@ class SlackConversation(SlackMessageBuffer):
                     self.hotlist_tss.add(message.latest_reply)
                 await message.handle_thread_notify_and_auto_open()
 
+    async def fetch_inline_thread_replies(self, messages: List[SlackMessage]):
+        remaining_thread_parents = self.workspace.config.threads_fetch_count.value
+        thread_replies_limit = self.workspace.config.thread_replies_fetch_count.value
+        for message in messages:
+            if not message.is_thread_parent:
+                continue
+            if remaining_thread_parents <= 0 or thread_replies_limit <= 0:
+                break
+
+            # conversations.replies returns the parent message as the first
+            # item, so request one extra item for the parent while counting
+            # only replies against the per-thread reply limit.
+            await self.fetch_replies(message.ts, limit=thread_replies_limit + 1)
+            remaining_thread_parents -= 1
+
     async def fill_history(self, update: bool = False):
         if self.is_loading:
             return
@@ -523,13 +540,7 @@ class SlackConversation(SlackMessageBuffer):
                 self._add_or_update_message(message)
 
             if self.display_thread_replies():
-                await gather(
-                    *(
-                        self.fetch_replies(message.ts)
-                        for message in conversation_messages
-                        if message.is_thread_parent
-                    )
-                )
+                await self.fetch_inline_thread_replies(conversation_messages)
 
             if self.history_needs_refresh:
                 await self.rerender_history()

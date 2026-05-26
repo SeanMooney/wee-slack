@@ -203,7 +203,10 @@ class SlackApi(SlackApiCommon):
 
     async def fetch_conversations_history(self, conversation: SlackConversation):
         method = "conversations.history"
-        params: Params = {"channel": conversation.id}
+        params: Params = {
+            "channel": conversation.id,
+            "limit": self.workspace.config.history_fetch_count.value,
+        }
         response: SlackConversationsHistoryResponse = await self._fetch(method, params)
         if response["ok"] is False:
             raise SlackApiError(self.workspace, method, response, params)
@@ -219,14 +222,20 @@ class SlackApi(SlackApiCommon):
             "inclusive": inclusive,
         }
         response: SlackConversationsHistoryResponse = await self._fetch_list(
-            method, "messages", params
+            method,
+            "messages",
+            params,
+            self.workspace.config.history_fetch_count.value,
         )
         if response["ok"] is False:
             raise SlackApiError(self.workspace, method, response, params)
         return response
 
     async def fetch_conversations_replies(
-        self, conversation: SlackConversation, parent_message_ts: SlackTs
+        self,
+        conversation: SlackConversation,
+        parent_message_ts: SlackTs,
+        limit: Optional[int] = None,
     ):
         method = "conversations.replies"
         params: Params = {
@@ -234,7 +243,12 @@ class SlackApi(SlackApiCommon):
             "ts": parent_message_ts,
         }
         response: SlackConversationsRepliesResponse = await self._fetch_list(
-            method, "messages", params
+            method,
+            "messages",
+            params,
+            limit
+            if limit is not None
+            else self.workspace.config.history_fetch_count.value,
         )
         if response["ok"] is False:
             raise SlackApiError(self.workspace, method, response, params)
